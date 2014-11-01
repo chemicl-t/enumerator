@@ -1,0 +1,12 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{enumerator}
+
+% TODO : LuaTeXかどうかのcheck
+
+\directlua{
+	enumerator = {}
+	dofile(assert(kpse.find_file('enumerator.lua', 'tex'), "`enumerator.lua' not found."))
+}
+
+\def\enabledebugenumerator{\directlua{enumerator.enable_debug()}}
+\def\enumerateallat#1{\directlua{enumerator.do_recursively("#1")}}
