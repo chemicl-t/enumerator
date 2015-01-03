@@ -169,3 +169,8 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# caprice added #
+.buildpath
+.project
+.settings/
+

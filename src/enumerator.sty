@@ -1,12 +1,51 @@
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{enumerator}
 
-% TODO : LuaTeXかどうかのcheck
+% LuaTeXかどうかチェック
+% 正しく動くはずだけどテストしてない
+\newif\ifisNOTLuaTeX
+\isNOTLuaTeXtrue
+
+\ifdefined\directlua\isNOTLuaTeXfalse\fi
+\ifisNOTLuaTeX\message{`enumerator.sty' requires LuaTeX.}\endinput\fi
+
+% todo: multiple load に耐性があるかどうか調査
 
 \directlua{
 	enumerator = {}
-	dofile(assert(kpse.find_file('enumerator.lua', 'tex'), "`enumerator.lua' not found."))
+	dofile(assert(kpse.find_file("enumerator.lua", "tex"), "`enumerator.lua' not found."))
 }
 
-\def\enabledebugenumerator{\directlua{enumerator.enable_debug()}}
-\def\enumerateallin#1{\directlua{enumerator.do_recursively("#1")}}
+\newcommand
+	{\matched}
+	[2]
+	{
+		
+	}
+
+\newcommand
+	{\notmatched}
+	[2]
+	{
+	
+	}
+
+\newcommand
+	{\newpattern}
+	[2]
+	[file]
+	{
+		
+	}
+
+\newpattern[file]
+{
+	\matched{.+}{}
+	\matched{.+}{}
+}
+
+
+%\setupuserpattern{user}
+
+\newcommand\enabledebugenumerator{\directlua{enumerator.debug = true}}
+\newcommand\enumerateallin[1]{\directlua{enumerator.start("#1")}}

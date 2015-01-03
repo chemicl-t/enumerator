@@ -1,80 +1,77 @@
 require("lfs")
+module("enumerator", package.seeall)
 
-enumerator = {
-	current_dir	= assert(lfs.currentdir()),
-	backslash	= string.char(0x5C),
-	dollar		= string.char(0x24),
-	info		= "enumerator.sty",
-	debug		= false,
+info = "enumerator.sty"
+debug = false
+root = ""
+symbol = { backslash = string.char(0x5c), dollar = string.char(0x24) }
 
-	-- regexp pattern
-	matcher = {}
+action_map = {
+  file = {}, 
+  directory = {}, 
+  -- link = {},
+  user = { file = {}, directory = {}, }
 }
 
-enumerator.matcher.common = function(pattern, str)
-	if str:match(pattern) then
-		enumerator.debugger("enumerator.matcher.common()", "`"..str.."' match `"..pattern.."'")
-		return true
-	else
-		return false
-	end
+-- todo: improvement this function...
+function dprint (str) 
+  if debug then print(str) end
 end
 
-enumerator.matcher.tex = function(str)
-	return enumerator.matcher.common(".+[.]tex", str)
+function command (str, ...)
+  return symbol.backslash..str.."{"..table.concat(({...}), ",").."}"
 end
 
-enumerator.matcher.nosys = function(str)
-	return not enumerator.matcher.common("^[.].*", str)
+function init ()
+  -- user's action map.
+  table.insert(action_map.user.file, {"", function (path) return false end})
+  table.insert(action_map.user.directory, {"", function (path) return false end})
+
+  -- system's action map.
+  table.insert(action_map.file, {"^[.].*", function (path) return true end})
+  table.insert(action_map.file, {".+[.]tex$",
+    function (path)
+      tex.print(command("input", path)) 
+      return true
+    end
+  })
+
+  table.insert(action_map.directory, {"^[.].*", function (path) return true end})
+  table.insert(action_map.directory, {".+", function (path) do_(path) return true end})
 end
 
-enumerator.enable_debug = function() 
-	enumerator.debug = true
-	
+function do_ (path)
+  local function match_and_action (file, pattern, action)
+    if file:match(pattern) then 
+      dprint("MATCH : file = "..path.."/"..file.." | pattern = "..pattern)
+      return action(path.."/"..file)
+    end
+    return false
+  end
+
+  local function attribute(file, path) return lfs.attributes(path.."/"..file, "mode") end 
+  local function user_map (file, path) return action_map.user[attribute(file, path)] end
+  local function sys_map  (file, path) return action_map[attribute(file, path)] end
+
+  local function rounds (file, path, map)
+    for k, v in ipairs(map(file, path)) do
+      if match_and_action(file, unpack(v)) then 
+        return true 
+      end
+    end
+    return false
+  end
+
+  for file in lfs.dir(path) do
+    if not rounds(file, path, user_map) then rounds(file, path, sys_map) end
+  end
 end
 
-enumerator.is_dir = function(path)
-	return (lfs.attributes(path, "mode") == "directory")
+function start (...)
+  if #{...} ~= 0 then
+    root = unpack({...})
+  end
+  do_(root)
 end
 
-enumerator.is_file = function(path)
-	return (lfs.attributes(path, "mode") == "file")
-end
-
-enumerator.print_command = function(csname, impl) 
-	tex.print(enumerator.backslash..csname.."{"..impl.."}")
-end
-
-enumerator.debugger = function(func, str)
-	if enumerator.debug then
-		local msg = " [debug] "..func..":"..str
-		print(msg)
-	end
-end
-
-enumerator.do_ = function(in_this_dir, attribute_detector, regex_matcher, callback)
-	local rpath_to_this_dir = enumerator.current_dir.."/"..in_this_dir
-	enumerator.debugger("enumerator.do_()", "rpath_to_this_dir is "..rpath_to_this_dir)
-	for name in lfs.dir(rpath_to_this_dir) do
-		enumerator.debugger("enumerator.do_()", "name is "..name)
-		if (attribute_detector(rpath_to_this_dir.."/"..name) and regex_matcher(name)) then
-			callback(in_this_dir.."/"..name)
-		end
-	end
-end
-
-enumerator.do_recursively = function(in_this_dir)
-	-- enumerate files...
-	enumerator.do_(
-		in_this_dir,
-		enumerator.is_file, 
-		enumerator.matcher.tex, 
-		function(objpath) enumerator.print_command("input", objpath) end)
-
-	-- look child-dir...
-	enumerator.do_(
-		in_this_dir, 
-		enumerator.is_dir, 
-		enumerator.matcher.nosys, 
-		function(objpath) return enumerator.do_recursively(objpath) end)
-end
+init()
