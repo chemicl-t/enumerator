@@ -1,6 +1,8 @@
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{enumerator}
 
+\makeatletter
+
 % LuaTeXかどうかチェック
 % 正しく動くはずだけどテストしてない
 \newif\ifisNOTLuaTeX
@@ -9,25 +11,60 @@
 \ifdefined\directlua\isNOTLuaTeXfalse\fi
 \ifisNOTLuaTeX\message{`enumerator.sty' requires LuaTeX.}\endinput\fi
 
-% todo: multiple load に耐性があるかどうか調査
+% todo	: multiple load に耐性があるかどうか調査
+% fixme	: 最初にfileをload -> directoryをload、のはずなのにごっちゃごちゃになってる、、、
+% fixme	: 案1. file-listを作成して、sort した後、include/exclude 指定を考慮して上から load
+% fixme	: 案2. ディレクトリ内を、1回 (ファイルを舐める)、2回 (ディレクトリを舐めて再帰的に下に行く)、、、とする
 
 \directlua{
 	enumerator = {}
 	dofile(assert(kpse.find_file("enumerator.lua", "tex"), "`enumerator.lua' not found."))
 }
 
+\def\@pathmatched{path}
+\def\@filematched{file}
+\def\@directorymatched{dir}
+
 \newcommand
 	{\matched}
-	[2]
+	[3]
 	{
+		object_map = enumerator.action_map.user.#1
 		
+		if((object_map[0] == enumerator.default_action_and_pattern)) and (table.maxn(object_map) == 0) then
+			table.remove(object_map, 1)
+		end
+		
+		table.insert(object_map, {"#2", function (\@pathmatched) #3 end})
 	}
 
 \newcommand
-	{\notmatched}
+	{\newaction}
 	[2]
 	{
-	
+		\expandafter\def\csname #1\endcsname##1{\matched{\@fileattribute}{##1}{#2}}
+	}
+
+\newaction
+	{includeif}
+	{
+		tex.print(enumerator.command("input", \@pathmatched))
+		return enumerator.action.break_
+	}
+
+\newaction
+	{excludeif}
+	{
+		return enumerator.action.break_
+	}
+
+\newaction
+	{deleteif}
+	{
+		filename, dirs = enumerator.tool.get_filename(path)
+		lfs.chdir(dirs)
+		
+		return enumerator.action.break_
 	}
 
 \newcommand
@@ -35,17 +72,21 @@
 	[2]
 	[file]
 	{
-		
+		\def\@fileattribute{#1}
+		\directlua{
+			#2
+		}
 	}
 
-\newpattern[file]
-{
-	\matched{.+}{}
-	\matched{.+}{}
-}
-
+%\newpattern
+%{
+%	\includeif{.+}
+%	\excludeif{.+}
+%}
 
 %\setupuserpattern{user}
 
 \newcommand\enabledebugenumerator{\directlua{enumerator.debug = true}}
 \newcommand\enumerateallin[1]{\directlua{enumerator.start("#1")}}
+
+\makeatother

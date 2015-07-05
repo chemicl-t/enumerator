@@ -6,6 +6,8 @@ debug = false
 root = ""
 symbol = { backslash = string.char(0x5c), dollar = string.char(0x24) }
 
+action = { continue_ = false, break_ = true }
+
 action_map = {
   file = {}, 
   directory = {}, 
@@ -22,31 +24,34 @@ function command (str, ...)
   return symbol.backslash..str.."{"..table.concat(({...}), ",").."}"
 end
 
+default_action_and_pattern =  {"", function (path) return action.continue_ end}
+
 function init ()
   -- user's action map.
-  table.insert(action_map.user.file, {"", function (path) return false end})
-  table.insert(action_map.user.directory, {"", function (path) return false end})
+  table.insert(action_map.user.file, default_action_and_pattern)
+  table.insert(action_map.user.directory, default_action_and_pattern)
 
   -- system's action map.
-  table.insert(action_map.file, {"^[.].*", function (path) return true end})
+  table.insert(action_map.file, {"^[.].*", function (path) return action.break_ end})
   table.insert(action_map.file, {".+[.]tex$",
     function (path)
       tex.print(command("input", path)) 
-      return true
+      return action.break_
     end
   })
 
-  table.insert(action_map.directory, {"^[.].*", function (path) return true end})
-  table.insert(action_map.directory, {".+", function (path) do_(path) return true end})
+  table.insert(action_map.directory, {"^[.].*", function (path) return action.break_ end})
+  table.insert(action_map.directory, {".+", 
+  function (path) do_(path) return action.break_ end})
 end
 
 function do_ (path)
-  local function match_and_action (file, pattern, action)
+  local function match_and_action (file, pattern, action_)
     if file:match(pattern) then 
       dprint("MATCH : file = "..path.."/"..file.." | pattern = "..pattern)
-      return action(path.."/"..file)
+      return action_(path.."/"..file)
     end
-    return false
+    return action.continue_
   end
 
   local function attribute(file, path) return lfs.attributes(path.."/"..file, "mode") end 
@@ -55,11 +60,12 @@ function do_ (path)
 
   local function rounds (file, path, map)
     for k, v in ipairs(map(file, path)) do
-      if match_and_action(file, unpack(v)) then 
-        return true 
+      -- このネストイミフでしょ？でも意味あるんだよ（意図を書くのがめんどくさい）
+      if match_and_action(file, unpack(v)) == action.break_ then 
+        return action.break_ 
       end
     end
-    return false
+    return action.continue_
   end
 
   for file in lfs.dir(path) do
